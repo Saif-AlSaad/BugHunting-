@@ -24,6 +24,7 @@ export interface TestEnvState {
   cart: { id: string; name: string; price: number; qty: number }[];
   coupon: string;
   couponApplied: boolean;
+  couponCount: number;
   address: string;
   paymentMethod: string;
   orderPlaced: boolean;

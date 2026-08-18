@@ -105,7 +105,6 @@ export default function App() {
     setMission(scaled);
     setEnv(INITIAL_ENV());
     setDiscoveredBugs([]);
-    setReports([]);
     setMissionReports([]);
     setMissionXP(0);
     setTimeLeft(scaled.timeLimit);
@@ -197,6 +196,7 @@ export default function App() {
     };
 
     setMissionReports(prev => [...prev, report]);
+    setReports(prev => [...prev, report]);
     setMissionXP(prev => prev + Math.max(0, score));
     setStreak(prev => {
       const next = valid ? prev + 1 : 0;
@@ -243,7 +243,7 @@ export default function App() {
         ...prev,
         totalReports: prev.totalReports + 1,
         falsePositives: prev.falsePositives + 1,
-        accuracy: prev.bugsFound > 0 ? Math.round((prev.bugsFound / (prev.totalReports + 1)) * 100) : 100,
+        accuracy: Math.round((prev.bugsFound / (prev.totalReports + 1)) * 100),
         xp: Math.max(0, prev.xp + score),
       }));
       notify(`❌ Report rejected. ${feedback}`);

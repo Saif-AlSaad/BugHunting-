@@ -107,7 +107,7 @@ export function getLevelMission(level: number, allMissions: Mission[]): Mission 
 export const INITIAL_ENV: () => TestEnvState = () => ({
   username: "", password: "", loggedIn: false, otp: "", resetEmail: "",
   otpUsed: false, loginAttempts: 0,
-  searchQuery: "", cart: [], coupon: "", couponApplied: false,
+  searchQuery: "", cart: [], coupon: "", couponApplied: false, couponCount: 0,
   address: "", paymentMethod: "", orderPlaced: false, wishlist: [],
   balance: 5000, transferTo: "", transferAmount: 0,
   depositAmount: 0, withdrawAmount: 0,
