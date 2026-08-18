@@ -7,9 +7,16 @@ interface Props {
   env: TestEnvState;
   discoveredBugs: string[];
   timeLeft: number;
+  level: number;
+  levelLabel: string;
+  hintsUsed: number;
+  freeHints: number;
+  hintPenalty: number;
+  streak: number;
   onStateChange: (fn: (s: TestEnvState) => TestEnvState) => void;
   onBugFound: (bug: Bug) => void;
   onReport: (bug: Bug) => void;
+  onRequestHint: () => void;
   onOpenConsole: () => void;
   onQuit: () => void;
 }
@@ -21,7 +28,10 @@ const ECOM_PRODUCTS = [
   { id: "p4", name: "Webcam HD", price: 69.99 },
 ];
 
-export default function TestEnvironment({ mission, env, discoveredBugs, timeLeft, onStateChange, onBugFound, onReport, onQuit }: Props) {
+export default function TestEnvironment({
+  mission, env, discoveredBugs, timeLeft, level, levelLabel, hintsUsed, freeHints, hintPenalty, streak,
+  onStateChange, onBugFound, onReport, onRequestHint, onQuit,
+}: Props) {
   const [activeTab, setActiveTab] = useState<string>(
     mission.id === "login" ? "login" : mission.id === "ecommerce" ? "shop" : "transfer"
   );
@@ -198,13 +208,29 @@ export default function TestEnvironment({ mission, env, discoveredBugs, timeLeft
             <p className="font-mono text-[10px] text-slate-500">{mission.clientName} · {mission.sprintName}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          <span className="font-mono text-xs font-bold text-violet-300" title="Difficulty level">
+            🎚 Lv.{level} {levelLabel}
+          </span>
+          {streak >= 3 && (
+            <span className="animate-fade-in-up font-mono text-xs font-bold text-orange-300" title="Consecutive valid, no-hint reports">
+              🔥 Streak x{streak >= 8 ? 2 : streak >= 5 ? 1.5 : 1.2} ({streak})
+            </span>
+          )}
           <span className={cn("font-mono text-sm font-bold", timeLeft < 60 ? "text-rose-400 animate-pulse" : "text-emerald-300")}>
             ⏱ {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
           </span>
           <span className="font-mono text-sm text-amber-300">
             🐛 {discoveredBugs.length}/{mission.bugs.length}
           </span>
+          <button
+            onClick={onRequestHint}
+            disabled={discoveredBugs.length === mission.bugs.length}
+            title={hintsUsed < freeHints ? `${freeHints - hintsUsed} free hints left` : `Costs ${hintPenalty} XP`}
+            className="rounded-lg bg-violet-500/15 px-3 py-1.5 font-mono text-xs font-bold text-violet-200 ring-1 ring-violet-400/30 transition-all hover:bg-violet-500/25 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            💡 Hint {hintsUsed < freeHints ? `(${freeHints - hintsUsed} free)` : `(−${hintPenalty} XP)`}
+          </button>
           <button onClick={onQuit} className="font-mono text-xs text-slate-400 hover:text-rose-300">
             ✕ Quit
           </button>

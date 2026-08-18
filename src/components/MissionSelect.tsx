@@ -1,9 +1,12 @@
 import type { Mission } from "../types";
 import { cn } from "../utils/cn";
+import { getLevelModifiers, scaleMissionForLevel } from "../game/apps";
 
 interface Props {
   missions: Mission[];
   completedMissions: string[];
+  level: number;
+  onLevelChange: (level: number) => void;
   onSelect: (m: Mission) => void;
   onBack: () => void;
 }
@@ -11,7 +14,9 @@ interface Props {
 const DIFFICULTY_LABELS = ["Beginner", "Intermediate", "Advanced"];
 const DIFFICULTY_COLORS = ["text-emerald-400", "text-amber-400", "text-rose-400"];
 
-export default function MissionSelect({ missions, completedMissions, onSelect, onBack }: Props) {
+export default function MissionSelect({ missions, completedMissions, level, onLevelChange, onSelect, onBack }: Props) {
+  const mods = getLevelModifiers(level);
+
   return (
     <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center px-4 py-8">
       <h2 className="font-mono text-2xl font-bold text-sky-300 sm:text-3xl">
@@ -19,9 +24,34 @@ export default function MissionSelect({ missions, completedMissions, onSelect, o
       </h2>
       <p className="mt-2 font-mono text-sm text-slate-400">Choose an application to investigate for bugs.</p>
 
+      {/* Difficulty Level Selector */}
+      <div className="mt-6 w-full max-w-lg rounded-2xl border border-violet-500/30 bg-slate-900/70 p-4 ring-1 ring-violet-400/10">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-xs font-bold text-violet-300">🎚️ Difficulty Level</span>
+          <span className="font-mono text-xs font-bold text-violet-200">{level} / 100 — {mods.label}</span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={100}
+          value={level}
+          onChange={e => onLevelChange(Number(e.target.value))}
+          className="mt-3 w-full accent-violet-500"
+        />
+        <div className="mt-2 grid grid-cols-3 gap-2 text-center font-mono text-[10px] text-slate-400">
+          <div>⏱ {Math.round(mods.timeMultiplier * 100)}% time</div>
+          <div>⭐ {mods.xpMultiplier.toFixed(1)}x XP</div>
+          <div>💡 {mods.freeHints} free hint{mods.freeHints === 1 ? "" : "s"}</div>
+        </div>
+        <p className="mt-2 text-center font-mono text-[10px] text-slate-500">
+          Higher levels mean less time on the clock, fewer free hints, and bigger XP rewards.
+        </p>
+      </div>
+
       <div className="mt-8 grid w-full grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {missions.map((m, i) => {
           const done = completedMissions.includes(m.id);
+          const scaled = scaleMissionForLevel(m, level);
           return (
             <button
               key={m.id}
@@ -44,10 +74,16 @@ export default function MissionSelect({ missions, completedMissions, onSelect, o
                 {DIFFICULTY_LABELS[m.difficulty - 1]}
               </span>
               <p className="mt-2 text-xs leading-relaxed text-slate-400">{m.description.slice(0, 120)}...</p>
-              <div className="mt-4 flex items-center gap-2 border-t border-slate-700/50 pt-3">
+              <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-950/60 px-2 py-1.5">
+                <span className="font-mono text-[10px] text-slate-400">⏱ {Math.floor(scaled.timeLimit / 60)}m</span>
+                <span className="font-mono text-[10px] text-amber-300">🐛 {m.bugs.length} bugs</span>
+                <span className="font-mono text-[10px] text-emerald-300">
+                  💰 {scaled.bugs.reduce((s, b) => s + b.xpReward, 0)} XP
+                </span>
+              </div>
+              <div className="mt-3 flex items-center gap-2 border-t border-slate-700/50 pt-3">
                 <span className="text-[10px] text-slate-500">🏢 {m.clientName}</span>
                 <span className="text-[10px] text-slate-500">📌 {m.sprintName}</span>
-                <span className="text-[10px] text-slate-500 ml-auto">🐛 {m.bugs.length} hidden bugs</span>
               </div>
             </button>
           );

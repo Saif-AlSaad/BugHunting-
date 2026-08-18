@@ -1,5 +1,49 @@
 import type { Mission, Bug, TestEnvState } from "../types";
 
+export const MIN_LEVEL = 1;
+export const MAX_LEVEL = 100;
+
+export interface LevelModifiers {
+  level: number;
+  timeMultiplier: number;   // scales mission.timeLimit
+  xpMultiplier: number;     // scales base XP reward on valid reports
+  freeHints: number;        // hints usable per mission before an XP penalty kicks in
+  hintPenalty: number;      // XP deducted per hint beyond the free allowance
+  label: string;            // human-readable difficulty band
+}
+
+/**
+ * Turns a 1–100 player-chosen level into concrete gameplay modifiers.
+ * Difficulty ramps up smoothly: less time, bigger XP payouts (and bigger
+ * risk), fewer free hints, and steeper hint penalties as level increases.
+ */
+export function getLevelModifiers(level: number): LevelModifiers {
+  const clamped = Math.min(Math.max(Math.round(level), MIN_LEVEL), MAX_LEVEL);
+  const progress = (clamped - MIN_LEVEL) / (MAX_LEVEL - MIN_LEVEL); // 0 → 1
+
+  const timeMultiplier = 1.2 - progress * 0.7;        // level 1: 1.2x time, level 100: 0.5x time
+  const xpMultiplier = 1 + progress * 2;               // level 1: 1x XP, level 100: 3x XP
+  const freeHints = clamped <= 25 ? 3 : clamped <= 50 ? 2 : clamped <= 75 ? 1 : 0;
+  const hintPenalty = Math.round(10 + progress * 50);  // level 1: 10 XP, level 100: 60 XP
+
+  const label =
+    clamped <= 20 ? "Rookie" :
+    clamped <= 40 ? "Junior" :
+    clamped <= 60 ? "Veteran" :
+    clamped <= 80 ? "Elite" : "Legendary";
+
+  return { level: clamped, timeMultiplier, xpMultiplier, freeHints, hintPenalty, label };
+}
+
+export function scaleMissionForLevel(mission: Mission, level: number): Mission {
+  const mods = getLevelModifiers(level);
+  return {
+    ...mission,
+    timeLimit: Math.max(90, Math.round(mission.timeLimit * mods.timeMultiplier)),
+    bugs: mission.bugs.map(b => ({ ...b, xpReward: Math.round(b.xpReward * mods.xpMultiplier) })),
+  };
+}
+
 export const INITIAL_ENV: () => TestEnvState = () => ({
   username: "", password: "", loggedIn: false, otp: "", resetEmail: "",
   otpUsed: false, loginAttempts: 0,

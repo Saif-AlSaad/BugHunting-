@@ -3,7 +3,7 @@ import type {
   Bug, BugReport, Mission, PlayerProfile, Screen, Severity, TestEnvState,
 } from "./types";
 import { RANKS, ACHIEVEMENT_TEMPLATES } from "./types";
-import { ALL_MISSIONS, INITIAL_ENV } from "./game/apps";
+import { ALL_MISSIONS, INITIAL_ENV, getLevelModifiers, scaleMissionForLevel } from "./game/apps";
 import { cn } from "./utils/cn";
 import HomeScreen from "./components/HomeScreen";
 import MissionSelect from "./components/MissionSelect";
@@ -15,13 +15,28 @@ import Dashboard from "./components/Dashboard";
 const loadProfile = (): PlayerProfile => {
   try {
     const d = localStorage.getItem("bh_profile");
-    if (d) return JSON.parse(d);
+    if (d) {
+      const p = JSON.parse(d);
+      return { hintsUsed: 0, level: 1, ...p };
+    }
   } catch { /* ignore */ }
   return {
     xp: 0, rank: "QA Intern", bugsFound: 0, bugsCritical: 0, bugsHigh: 0,
     bugsMedium: 0, bugsLow: 0, falsePositives: 0, totalReports: 0,
     testCases: 3, accuracy: 100, achievements: ACHIEVEMENT_TEMPLATES.map(a => ({ ...a })),
+    hintsUsed: 0, level: 1,
   };
+};
+
+const loadLevel = (): number => {
+  try {
+    const d = localStorage.getItem("bh_level");
+    if (d) {
+      const n = JSON.parse(d);
+      if (typeof n === "number" && n >= 1 && n <= 100) return n;
+    }
+  } catch { /* ignore */ }
+  return 1;
 };
 
 export default function App() {
@@ -37,15 +52,34 @@ export default function App() {
   const [missionReports, setMissionReports] = useState<BugReport[]>([]);
   const [missionXP, setMissionXP] = useState(0);
   const [completedMissions, setCompletedMissions] = useState<string[]>([]);
-  const [hintIdx, setHintIdx] = useState(0);
   const [hintText, setHintText] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Difficulty level (1-100), chosen by the player and remembered between visits
+  const [level, setLevel] = useState<number>(loadLevel);
+  const levelMods = getLevelModifiers(level);
+
+  // Hint tracking for the mission in progress
+  const [hintsUsedThisMission, setHintsUsedThisMission] = useState(0);
+  const [hintBugId, setHintBugId] = useState<string | null>(null);
+  const [hintStepForBug, setHintStepForBug] = useState(0);
+
+  // Consecutive valid, no-hint-since-last-report streak (grants a small XP bonus)
+  const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Persist profile
   useEffect(() => {
     try { localStorage.setItem("bh_profile", JSON.stringify(profile)); } catch { /* */ }
   }, [profile]);
+
+  // Persist chosen difficulty level, and keep it mirrored onto the profile for display
+  useEffect(() => {
+    try { localStorage.setItem("bh_level", JSON.stringify(level)); } catch { /* */ }
+    setProfile(prev => (prev.level === level ? prev : { ...prev, level }));
+  }, [level]);
 
   // Timer
   useEffect(() => {
@@ -67,42 +101,73 @@ export default function App() {
     }
   }, [timeLeft]);
 
-  // Show hints for undiscovered bugs
-  useEffect(() => {
-    if (screen !== "testing" || !mission) return;
-    const undiscovered = mission.bugs.filter(b => !discoveredBugs.includes(b.id));
-    if (undiscovered.length === 0) return;
-    const bug = undiscovered[hintIdx % undiscovered.length];
-    if (!bug) return;
-    const hint = bug.hints[hintIdx % bug.hints.length];
-    const t = setTimeout(() => setHintText(`💡 AI Mentor: "${hint}"`), 12000);
-    return () => clearTimeout(t);
-  }, [hintIdx, screen, mission, discoveredBugs]);
-
   function notify(text: string) {
     setNotification(text);
     setTimeout(() => setNotification(null), 3000);
   }
 
+  function streakMultiplier(s: number) {
+    if (s >= 8) return 2;
+    if (s >= 5) return 1.5;
+    if (s >= 3) return 1.2;
+    return 1;
+  }
+
   function startMission(m: Mission) {
-    setMission(m);
+    const scaled = scaleMissionForLevel(m, level);
+    setMission(scaled);
     setEnv(INITIAL_ENV());
     setDiscoveredBugs([]);
     setReports([]);
     setMissionReports([]);
     setMissionXP(0);
-    setTimeLeft(m.timeLimit);
+    setTimeLeft(scaled.timeLimit);
     setTimeUsed(0);
-    setHintIdx(0);
+    setHintsUsedThisMission(0);
+    setHintBugId(null);
+    setHintStepForBug(0);
     setHintText(null);
+    setStreak(0);
+    setBestStreak(0);
     setScreen("testing");
   }
 
   function handleBugFound(bug: Bug) {
     setDiscoveredBugs(prev => [...prev, bug.id]);
     notify(`🐛 Bug Discovered! ${bug.title} (${bug.severity.toUpperCase()} — ${bug.xpReward} XP potential)`);
-    setHintIdx(i => i + 1);
+    if (hintBugId === bug.id) {
+      setHintBugId(null);
+      setHintStepForBug(0);
+    }
     setHintText(null);
+  }
+
+  // Player explicitly asks for a clue when they're stuck.
+  function useHint() {
+    if (!mission) return;
+    const undiscovered = mission.bugs.filter(b => !discoveredBugs.includes(b.id));
+    if (undiscovered.length === 0) {
+      notify("🎉 No bugs left to hint about — you found them all!");
+      return;
+    }
+    // Stick with the same bug across repeated hint requests so clues build on each other.
+    const bug = (hintBugId && undiscovered.find(b => b.id === hintBugId)) || undiscovered[0];
+    const step = bug.id === hintBugId ? hintStepForBug : 0;
+    const hint = bug.hints[Math.min(step, bug.hints.length - 1)];
+
+    const isFree = hintsUsedThisMission < levelMods.freeHints;
+    const cost = isFree ? 0 : levelMods.hintPenalty;
+
+    setHintBugId(bug.id);
+    setHintStepForBug(step + 1);
+    setHintsUsedThisMission(prev => prev + 1);
+    setStreak(0); // asking for help breaks the no-hint streak
+    setProfile(prev => ({
+      ...prev,
+      xp: Math.max(0, prev.xp - cost),
+      hintsUsed: prev.hintsUsed + 1,
+    }));
+    setHintText(cost > 0 ? `💡 AI Mentor (-${cost} XP): "${hint}"` : `💡 AI Mentor (free hint): "${hint}"`);
   }
 
   function handleEnvChange(fn: (s: TestEnvState) => TestEnvState) {
@@ -127,6 +192,12 @@ export default function App() {
       } else {
         feedback = `Excellent report! Correct severity (${bug.severity}) and detailed description.`;
       }
+      // Streak bonus for consecutive valid, no-hint reports
+      const mult = streakMultiplier(streak);
+      if (mult > 1) {
+        score = Math.round(score * mult);
+        feedback += ` 🔥 Streak bonus x${mult}!`;
+      }
     } else {
       valid = false;
       score = -30;
@@ -140,6 +211,11 @@ export default function App() {
 
     setMissionReports(prev => [...prev, report]);
     setMissionXP(prev => prev + Math.max(0, score));
+    setStreak(prev => {
+      const next = valid ? prev + 1 : 0;
+      setBestStreak(b => Math.max(b, next));
+      return next;
+    });
 
     if (valid) {
       setProfile(prev => {
@@ -213,6 +289,34 @@ export default function App() {
       });
     }
 
+    // No-hints achievement: found every bug without asking for help
+    if (hintsUsedThisMission === 0 && mission && discoveredBugs.length === mission.bugs.length) {
+      setProfile(prev => {
+        const na = [...prev.achievements];
+        const idx = na.findIndex(a => a.id === "no_hints");
+        if (idx >= 0) na[idx] = { ...na[idx], unlocked: true };
+        return { ...prev, achievements: na };
+      });
+    }
+
+    // Level milestone achievements
+    if (level >= 50) {
+      setProfile(prev => {
+        const na = [...prev.achievements];
+        const idx = na.findIndex(a => a.id === "level_50");
+        if (idx >= 0) na[idx] = { ...na[idx], unlocked: true };
+        return { ...prev, achievements: na };
+      });
+    }
+    if (level >= 100) {
+      setProfile(prev => {
+        const na = [...prev.achievements];
+        const idx = na.findIndex(a => a.id === "level_100");
+        if (idx >= 0) na[idx] = { ...na[idx], unlocked: true };
+        return { ...prev, achievements: na };
+      });
+    }
+
     setCompletedMissions(prev => [...new Set([...prev, mission!.id])]);
 
     // Check full stack
@@ -276,6 +380,8 @@ export default function App() {
         <MissionSelect
           missions={ALL_MISSIONS}
           completedMissions={completedMissions}
+          level={level}
+          onLevelChange={setLevel}
           onSelect={startMission}
           onBack={() => setScreen("home")}
         />
@@ -287,9 +393,16 @@ export default function App() {
           env={env}
           discoveredBugs={discoveredBugs}
           timeLeft={timeLeft}
+          level={level}
+          levelLabel={levelMods.label}
+          hintsUsed={hintsUsedThisMission}
+          freeHints={levelMods.freeHints}
+          hintPenalty={levelMods.hintPenalty}
+          streak={streak}
           onStateChange={handleEnvChange}
           onBugFound={handleBugFound}
           onReport={setReportBug}
+          onRequestHint={useHint}
           onOpenConsole={() => {}}
           onQuit={() => { if (timerRef.current) clearInterval(timerRef.current); setScreen("home"); }}
         />
@@ -312,6 +425,9 @@ export default function App() {
           timeUsed={timeUsed}
           xpEarned={missionXP}
           accuracy={missionReports.length > 0 ? Math.round((missionReports.filter(r => r.valid).length / missionReports.length) * 100) : 0}
+          level={level}
+          hintsUsed={hintsUsedThisMission}
+          bestStreak={bestStreak}
           onContinue={() => { setScreen("missions"); }}
           onHome={() => setScreen("home")}
         />

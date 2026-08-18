@@ -95,6 +95,8 @@ export interface PlayerProfile {
   testCases: number;
   accuracy: number;
   achievements: Achievement[];
+  hintsUsed: number;
+  level: number;
 }
 
 export interface Mission {
@@ -108,6 +110,107 @@ export interface Mission {
   timeLimit: number;
   bugs: Bug[];
   requirements: string[];
+}
+
+export type DifficultyTier =
+  | "beginner"
+  | "intermediate"
+  | "advanced"
+  | "expert"
+  | "elite";
+
+export interface DifficultyConfig {
+  tier: DifficultyTier;
+  label: string;
+  minLevel: number;
+  maxLevel: number;
+
+  timeMultiplier: number;
+  maxHints: number;
+  hintPenalty: number;
+
+  bugComplexity: number;
+  xpMultiplier: number;
+}
+
+export const DIFFICULTY_CONFIGS: DifficultyConfig[] = [
+  {
+    tier: "beginner",
+    label: "Beginner",
+    minLevel: 1,
+    maxLevel: 20,
+    timeMultiplier: 1.0,
+    maxHints: 3,
+    hintPenalty: 0.10,
+    bugComplexity: 1,
+    xpMultiplier: 1.0,
+  },
+
+  {
+    tier: "intermediate",
+    label: "Intermediate",
+    minLevel: 21,
+    maxLevel: 40,
+    timeMultiplier: 0.90,
+    maxHints: 3,
+    hintPenalty: 0.15,
+    bugComplexity: 2,
+    xpMultiplier: 1.20,
+  },
+
+  {
+    tier: "advanced",
+    label: "Advanced",
+    minLevel: 41,
+    maxLevel: 60,
+    timeMultiplier: 0.80,
+    maxHints: 2,
+    hintPenalty: 0.20,
+    bugComplexity: 3,
+    xpMultiplier: 1.40,
+  },
+
+  {
+    tier: "expert",
+    label: "Expert",
+    minLevel: 61,
+    maxLevel: 80,
+    timeMultiplier: 0.70,
+    maxHints: 2,
+    hintPenalty: 0.25,
+    bugComplexity: 4,
+    xpMultiplier: 1.70,
+  },
+
+  {
+    tier: "elite",
+    label: "Elite",
+    minLevel: 81,
+    maxLevel: 100,
+    timeMultiplier: 0.60,
+    maxHints: 1,
+    hintPenalty: 0.35,
+    bugComplexity: 5,
+    xpMultiplier: 2.00,
+  },
+];
+
+export function getDifficultyConfig(
+  level: number
+): DifficultyConfig {
+
+  const safeLevel = Math.max(
+    1,
+    Math.min(100, level)
+  );
+
+  return (
+    DIFFICULTY_CONFIGS.find(
+      config =>
+        safeLevel >= config.minLevel &&
+        safeLevel <= config.maxLevel
+    ) || DIFFICULTY_CONFIGS[0]
+  );
 }
 
 export const RANKS = [
@@ -128,4 +231,7 @@ export const ACHIEVEMENT_TEMPLATES: Achievement[] = [
   { id: "edge_case_master", title: "Edge Case Master", emoji: "🧠", description: "Find a boundary-value bug", unlocked: false },
   { id: "full_stack", title: "Full Stack", emoji: "🌐", description: "Test all 3 applications", unlocked: false },
   { id: "xp_1000", title: "Rising Star", emoji: "⭐", description: "Reach 1,000 XP", unlocked: false },
+  { id: "no_hints", title: "Independent Investigator", emoji: "🕵️", description: "Complete a mission without using a single hint", unlocked: false },
+  { id: "level_50", title: "Halfway Hunter", emoji: "🎚️", description: "Complete a mission at level 50 or higher", unlocked: false },
+  { id: "level_100", title: "Max Difficulty", emoji: "🏆", description: "Complete a mission at level 100", unlocked: false },
 ];

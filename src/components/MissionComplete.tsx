@@ -9,11 +9,14 @@ interface Props {
   timeUsed: number;
   xpEarned: number;
   accuracy: number;
+  level: number;
+  hintsUsed: number;
+  bestStreak: number;
   onContinue: () => void;
   onHome: () => void;
 }
 
-export default function MissionComplete({ mission, discoveredCount, totalBugs, reports, timeUsed, xpEarned, accuracy, onContinue, onHome }: Props) {
+export default function MissionComplete({ mission, discoveredCount, totalBugs, reports, timeUsed, xpEarned, accuracy, level, hintsUsed, bestStreak, onContinue, onHome }: Props) {
   const validCount = reports.filter(r => r.valid).length;
   const falseCount = reports.filter(r => !r.valid).length;
   const mins = Math.floor(timeUsed / 60);
@@ -25,7 +28,7 @@ export default function MissionComplete({ mission, discoveredCount, totalBugs, r
         <div className="text-center">
           <p className="text-5xl">🏁</p>
           <h2 className="mt-3 font-mono text-2xl font-bold text-emerald-300 sm:text-3xl">Sprint Complete!</h2>
-          <p className="mt-1 font-mono text-sm text-slate-400">{mission.title} · {mission.sprintName}</p>
+            <p className="mt-1 font-mono text-sm text-slate-400">{mission.title} · {mission.sprintName} · Lv.{level}</p>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -34,6 +37,8 @@ export default function MissionComplete({ mission, discoveredCount, totalBugs, r
             { label: "Valid Reports", value: validCount, color: "text-sky-300" },
             { label: "False Positives", value: falseCount, color: "text-rose-300" },
             { label: "Accuracy", value: `${accuracy}%`, color: "text-amber-300" },
+            { label: "Hints Used", value: hintsUsed, color: "text-violet-300" },
+            { label: "Best Streak", value: `🔥${bestStreak}`, color: "text-orange-300" },
           ].map((s, i) => (
             <div key={i} className="rounded-xl bg-slate-800/60 p-3 ring-1 ring-slate-700/40 text-center">
               <p className={cn("font-mono text-xl font-bold", s.color)}>{s.value}</p>
