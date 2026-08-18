@@ -17,6 +17,7 @@ interface Props {
   onBugFound: (bug: Bug) => void;
   onReport: (bug: Bug) => void;
   onRequestHint: () => void;
+  onFinish: () => void; 
   onOpenConsole: () => void;
   onQuit: () => void;
 }
@@ -30,7 +31,7 @@ const ECOM_PRODUCTS = [
 
 export default function TestEnvironment({
   mission, env, discoveredBugs, timeLeft, level, levelLabel, hintsUsed, freeHints, hintPenalty, streak,
-  onStateChange, onBugFound, onReport, onRequestHint, onQuit,
+  onStateChange, onBugFound, onReport, onRequestHint, onFinish, onQuit,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string>(
     mission.id === "login" ? "login" : mission.id === "ecommerce" ? "shop" : "transfer"
@@ -231,11 +232,37 @@ export default function TestEnvironment({
           >
             💡 Hint {hintsUsed < freeHints ? `(${freeHints - hintsUsed} free)` : `(−${hintPenalty} XP)`}
           </button>
+                    <button
+            onClick={onFinish}
+            title="End this level now and see your results"
+            className={cn(
+              "rounded-lg px-3 py-1.5 font-mono text-xs font-bold ring-1 transition-all active:scale-95",
+              discoveredBugs.length === mission.bugs.length
+                ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/40 hover:bg-emerald-500/30"
+                : "bg-slate-800/60 text-slate-400 ring-slate-600/40 hover:bg-slate-700/60"
+            )}
+          >
+            🏁 Finish
+          </button>
           <button onClick={onQuit} className="font-mono text-xs text-slate-400 hover:text-rose-300">
             ✕ Quit
           </button>
         </div>
       </header>
+
+            {/* Level clear target */}
+      <div className={cn(
+        "mb-4 rounded-xl px-4 py-3 ring-1",
+        discoveredBugs.length === mission.bugs.length
+          ? "bg-emerald-500/10 ring-emerald-400/30"
+          : "bg-sky-500/5 ring-sky-500/20"
+      )}>
+        <p className={cn("font-mono text-xs font-bold", discoveredBugs.length === mission.bugs.length ? "text-emerald-300" : "text-sky-300")}>
+          {discoveredBugs.length === mission.bugs.length
+            ? `✅ All ${mission.bugs.length} bugs found — submit reports for each, then hit Finish to clear Level ${level}.`
+            : `🎯 Find & report all ${mission.bugs.length} bugs to clear Level ${level}${level < 100 ? ` and unlock Level ${level + 1}` : ""}.`}
+        </p>
+      </div>
 
       {/* Requirements */}
       <div className="mb-4 rounded-xl bg-amber-500/5 px-4 py-3 ring-1 ring-amber-500/20">

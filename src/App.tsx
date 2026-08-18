@@ -3,7 +3,7 @@ import type {
   Bug, BugReport, Mission, PlayerProfile, Screen, Severity, TestEnvState,
 } from "./types";
 import { RANKS, ACHIEVEMENT_TEMPLATES } from "./types";
-import { ALL_MISSIONS, INITIAL_ENV, getLevelModifiers, scaleMissionForLevel } from "./game/apps";
+import { ALL_MISSIONS, INITIAL_ENV, getLevelModifiers, getLevelMission, MAX_LEVEL } from "./game/apps";
 import { cn } from "./utils/cn";
 import HomeScreen from "./components/HomeScreen";
 import MissionSelect from "./components/MissionSelect";
@@ -17,26 +17,15 @@ const loadProfile = (): PlayerProfile => {
     const d = localStorage.getItem("bh_profile");
     if (d) {
       const p = JSON.parse(d);
-      return { hintsUsed: 0, level: 1, ...p };
+      return { hintsUsed: 0, highestUnlockedLevel: 1, ...p };
     }
   } catch { /* ignore */ }
   return {
     xp: 0, rank: "QA Intern", bugsFound: 0, bugsCritical: 0, bugsHigh: 0,
     bugsMedium: 0, bugsLow: 0, falsePositives: 0, totalReports: 0,
     testCases: 3, accuracy: 100, achievements: ACHIEVEMENT_TEMPLATES.map(a => ({ ...a })),
-    hintsUsed: 0, level: 1,
+    hintsUsed: 0, highestUnlockedLevel: 1,
   };
-};
-
-const loadLevel = (): number => {
-  try {
-    const d = localStorage.getItem("bh_level");
-    if (d) {
-      const n = JSON.parse(d);
-      if (typeof n === "number" && n >= 1 && n <= 100) return n;
-    }
-  } catch { /* ignore */ }
-  return 1;
 };
 
 export default function App() {
@@ -51,15 +40,17 @@ export default function App() {
   const [timeUsed, setTimeUsed] = useState(0);
   const [missionReports, setMissionReports] = useState<BugReport[]>([]);
   const [missionXP, setMissionXP] = useState(0);
-  const [completedMissions, setCompletedMissions] = useState<string[]>([]);
   const [hintText, setHintText] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Difficulty level (1-100), chosen by the player and remembered between visits
-  const [level, setLevel] = useState<number>(loadLevel);
+  // The level currently being played (1-100). Must be <= profile.highestUnlockedLevel.
+  const [level, setLevel] = useState<number>(1);
   const levelMods = getLevelModifiers(level);
 
-  // Hint tracking for the mission in progress
+  // Result of the most recently finished level, shown on the MissionComplete screen.
+  const [lastResult, setLastResult] = useState<{ cleared: boolean; leveledUp: boolean }>({ cleared: false, leveledUp: false });
+
+  // Hint tracking for the level in progress
   const [hintsUsedThisMission, setHintsUsedThisMission] = useState(0);
   const [hintBugId, setHintBugId] = useState<string | null>(null);
   const [hintStepForBug, setHintStepForBug] = useState(0);
@@ -74,12 +65,6 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem("bh_profile", JSON.stringify(profile)); } catch { /* */ }
   }, [profile]);
-
-  // Persist chosen difficulty level, and keep it mirrored onto the profile for display
-  useEffect(() => {
-    try { localStorage.setItem("bh_level", JSON.stringify(level)); } catch { /* */ }
-    setProfile(prev => (prev.level === level ? prev : { ...prev, level }));
-  }, [level]);
 
   // Timer
   useEffect(() => {
@@ -113,8 +98,10 @@ export default function App() {
     return 1;
   }
 
-  function startMission(m: Mission) {
-    const scaled = scaleMissionForLevel(m, level);
+  function startLevel(lvl: number) {
+    const clamped = Math.min(Math.max(lvl, 1), MAX_LEVEL);
+    const scaled = getLevelMission(clamped, ALL_MISSIONS);
+    setLevel(clamped);
     setMission(scaled);
     setEnv(INITIAL_ENV());
     setDiscoveredBugs([]);
@@ -267,11 +254,16 @@ export default function App() {
 
   function finishMission() {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (!mission) return;
+
+    // Clearing a level requires a VALID report for every bug the level threw at you.
+    const cleared = mission.bugs.every(b => missionReports.some(r => r.bugId === b.id && r.valid));
+    let leveledUp = false;
+
+    // Check achievements
     const accuracy = missionReports.filter(r => r.valid).length > 0
       ? Math.round((missionReports.filter(r => r.valid).length / missionReports.length) * 100)
       : 0;
-
-    // Check achievements
     if (missionReports.length > 0 && accuracy === 100) {
       setProfile(prev => {
         const na = [...prev.achievements];
@@ -288,9 +280,7 @@ export default function App() {
         return { ...prev, achievements: na };
       });
     }
-
-    // No-hints achievement: found every bug without asking for help
-    if (hintsUsedThisMission === 0 && mission && discoveredBugs.length === mission.bugs.length) {
+    if (hintsUsedThisMission === 0 && discoveredBugs.length === mission.bugs.length) {
       setProfile(prev => {
         const na = [...prev.achievements];
         const idx = na.findIndex(a => a.id === "no_hints");
@@ -299,16 +289,20 @@ export default function App() {
       });
     }
 
-    // Level milestone achievements
-    if (level >= 50) {
+    // Advance the ladder if this cleared the frontier level
+    if (cleared && level === profile.highestUnlockedLevel && level < MAX_LEVEL) {
+      leveledUp = true;
       setProfile(prev => {
+        const nextLevel = Math.min(MAX_LEVEL, prev.highestUnlockedLevel + 1);
         const na = [...prev.achievements];
-        const idx = na.findIndex(a => a.id === "level_50");
-        if (idx >= 0) na[idx] = { ...na[idx], unlocked: true };
-        return { ...prev, achievements: na };
+        const unlock = (id: string) => {
+          const idx = na.findIndex(a => a.id === id);
+          if (idx >= 0) na[idx] = { ...na[idx], unlocked: true };
+        };
+        if (nextLevel >= 50) unlock("level_50");
+        return { ...prev, highestUnlockedLevel: nextLevel, achievements: na };
       });
-    }
-    if (level >= 100) {
+    } else if (cleared && level === MAX_LEVEL) {
       setProfile(prev => {
         const na = [...prev.achievements];
         const idx = na.findIndex(a => a.id === "level_100");
@@ -317,19 +311,16 @@ export default function App() {
       });
     }
 
-    setCompletedMissions(prev => [...new Set([...prev, mission!.id])]);
-
-    // Check full stack
-    if (ALL_MISSIONS.every(m => completedMissions.includes(m.id) || m.id === mission!.id)) {
-      setProfile(prev => {
-        const na = [...prev.achievements];
-        const idx = na.findIndex(a => a.id === "full_stack");
-        if (idx >= 0) na[idx] = { ...na[idx], unlocked: true };
-        return { ...prev, achievements: na };
-      });
-    }
-
+    setLastResult({ cleared, leveledUp });
     setScreen("missionComplete");
+  }
+
+  function retryOrAdvance() {
+    if (lastResult.cleared) {
+      setScreen("missions");
+    } else {
+      startLevel(level);
+    }
   }
 
   // ---- Render ----
@@ -378,11 +369,8 @@ export default function App() {
 
       {screen === "missions" && (
         <MissionSelect
-          missions={ALL_MISSIONS}
-          completedMissions={completedMissions}
-          level={level}
-          onLevelChange={setLevel}
-          onSelect={startMission}
+          highestUnlockedLevel={profile.highestUnlockedLevel}
+          onSelectLevel={startLevel}
           onBack={() => setScreen("home")}
         />
       )}
@@ -403,6 +391,7 @@ export default function App() {
           onBugFound={handleBugFound}
           onReport={setReportBug}
           onRequestHint={useHint}
+          onFinish={finishMission}
           onOpenConsole={() => {}}
           onQuit={() => { if (timerRef.current) clearInterval(timerRef.current); setScreen("home"); }}
         />
@@ -428,7 +417,9 @@ export default function App() {
           level={level}
           hintsUsed={hintsUsedThisMission}
           bestStreak={bestStreak}
-          onContinue={() => { setScreen("missions"); }}
+          levelCleared={lastResult.cleared}
+          leveledUp={lastResult.leveledUp}
+          onContinue={retryOrAdvance}
           onHome={() => setScreen("home")}
         />
       )}

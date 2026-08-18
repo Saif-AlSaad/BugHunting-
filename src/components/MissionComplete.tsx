@@ -12,11 +12,16 @@ interface Props {
   level: number;
   hintsUsed: number;
   bestStreak: number;
+  levelCleared: boolean;
+  leveledUp: boolean;
   onContinue: () => void;
   onHome: () => void;
 }
 
-export default function MissionComplete({ mission, discoveredCount, totalBugs, reports, timeUsed, xpEarned, accuracy, level, hintsUsed, bestStreak, onContinue, onHome }: Props) {
+export default function MissionComplete({
+  mission, discoveredCount, totalBugs, reports, timeUsed, xpEarned, accuracy,
+  level, hintsUsed, bestStreak, levelCleared, leveledUp, onContinue, onHome,
+}: Props) {
   const validCount = reports.filter(r => r.valid).length;
   const falseCount = reports.filter(r => !r.valid).length;
   const mins = Math.floor(timeUsed / 60);
@@ -24,11 +29,24 @@ export default function MissionComplete({ mission, discoveredCount, totalBugs, r
 
   return (
     <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-2xl flex-col items-center justify-center px-4">
-      <div className="w-full rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-6 shadow-2xl ring-1 ring-emerald-400/20 sm:p-8">
+      <div className={cn(
+        "w-full rounded-2xl border p-6 shadow-2xl ring-1 sm:p-8",
+        levelCleared ? "border-emerald-500/30 ring-emerald-400/20" : "border-rose-500/30 ring-rose-400/20"
+      )}>
         <div className="text-center">
-          <p className="text-5xl">🏁</p>
-          <h2 className="mt-3 font-mono text-2xl font-bold text-emerald-300 sm:text-3xl">Sprint Complete!</h2>
-            <p className="mt-1 font-mono text-sm text-slate-400">{mission.title} · {mission.sprintName} · Lv.{level}</p>
+          <p className="text-5xl">{levelCleared ? "🏁" : "🚧"}</p>
+          <h2 className={cn("mt-3 font-mono text-2xl font-bold sm:text-3xl", levelCleared ? "text-emerald-300" : "text-rose-300")}>
+            {levelCleared ? "Level Cleared!" : "Level Not Cleared"}
+          </h2>
+          <p className="mt-1 font-mono text-sm text-slate-400">{mission.title} · {mission.sprintName} · Lv.{level}</p>
+          {levelCleared && leveledUp && (
+            <p className="mt-2 font-mono text-sm font-bold text-sky-300">🔓 Level {level + 1} unlocked!</p>
+          )}
+          {!levelCleared && (
+            <p className="mt-2 font-mono text-xs text-slate-400">
+              You need a valid report for every bug in this level. Head back to the ladder and try Level {level} again.
+            </p>
+          )}
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -83,7 +101,7 @@ export default function MissionComplete({ mission, discoveredCount, totalBugs, r
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
           <button onClick={onContinue}
             className="rounded-xl bg-gradient-to-b from-sky-500/20 to-sky-800/30 px-6 py-3 font-mono text-sm font-bold text-sky-200 ring-2 ring-sky-400/50 transition-all hover:from-sky-400/30 active:scale-95">
-            Continue Testing
+            {levelCleared ? "Back to Ladder" : "Retry Level"}
           </button>
           <button onClick={onHome}
             className="rounded-xl bg-slate-800/50 px-6 py-3 font-mono text-sm font-semibold text-slate-300 ring-1 ring-slate-600/40 transition-all hover:bg-slate-700/50 active:scale-95">

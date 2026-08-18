@@ -44,6 +44,66 @@ export function scaleMissionForLevel(mission: Mission, level: number): Mission {
   };
 }
 
+// ===== Level Progression (1-100, linear unlock) =====
+// The 100 levels are split into 3 bands, one per application archetype,
+// ordered easiest to hardest (login < e-commerce < banking). Within a band
+// the number of bugs you must find climbs from 2 up toward the app's full
+// bug pool, and the shared getLevelModifiers() curve keeps shrinking the
+// clock / growing the XP / tightening hints across the whole 1-100 range —
+// so every single level feels a little harder than the last.
+interface LevelBand {
+  from: number;
+  to: number;
+  missionIndex: number; // index into ALL_MISSIONS
+}
+
+function getLevelBands(): LevelBand[] {
+  return [
+    { from: 1, to: 34, missionIndex: 0 },   // Authentication System
+    { from: 35, to: 67, missionIndex: 1 },  // E-Commerce System
+    { from: 68, to: 100, missionIndex: 2 }, // Banking Application
+  ];
+}
+
+/** Deterministic shuffle so the same level always gets the same bug set. */
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const a = [...arr];
+  let s = seed % 2147483647;
+  if (s <= 0) s += 2147483646;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 16807) % 2147483647;
+    const j = Math.floor((s / 2147483647) * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** Which band (and how far through it) a given level falls into. */
+export function getLevelBandInfo(level: number): { band: LevelBand; bandIndex: number; posInBand: number } {
+  const clamped = Math.min(Math.max(Math.round(level), MIN_LEVEL), MAX_LEVEL);
+  const bands = getLevelBands();
+  const bandIndex = bands.findIndex(b => clamped >= b.from && clamped <= b.to);
+  const band = bands[bandIndex === -1 ? bands.length - 1 : bandIndex];
+  const posInBand = band.to === band.from ? 1 : (clamped - band.from) / (band.to - band.from);
+  return { band, bandIndex: bandIndex === -1 ? bands.length - 1 : bandIndex, posInBand };
+}
+
+/**
+ * Builds the actual mission a player faces at a given level: a
+ * progressively larger, harder-scaled slice of one of the 3 app archetypes.
+ */
+export function getLevelMission(level: number, allMissions: Mission[]): Mission {
+  const clamped = Math.min(Math.max(Math.round(level), MIN_LEVEL), MAX_LEVEL);
+  const { band, posInBand } = getLevelBandInfo(clamped);
+  const base = allMissions[band.missionIndex];
+
+  const bugCount = Math.max(2, Math.min(base.bugs.length, Math.round(2 + posInBand * (base.bugs.length - 2))));
+  const bugs = seededShuffle(base.bugs, clamped * 7919 + 13).slice(0, bugCount);
+
+  const scaled = scaleMissionForLevel({ ...base, bugs }, clamped);
+  return scaled;
+}
+
 export const INITIAL_ENV: () => TestEnvState = () => ({
   username: "", password: "", loggedIn: false, otp: "", resetEmail: "",
   otpUsed: false, loginAttempts: 0,

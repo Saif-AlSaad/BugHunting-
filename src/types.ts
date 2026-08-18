@@ -96,7 +96,7 @@ export interface PlayerProfile {
   accuracy: number;
   achievements: Achievement[];
   hintsUsed: number;
-  level: number;
+  highestUnlockedLevel: number;
 }
 
 export interface Mission {

@@ -50,7 +50,7 @@ export default function Dashboard({ profile, totalXP, reports, onBack }: Props) 
           { label: "Critical", value: profile.bugsCritical, color: "text-rose-300" },
           { label: "False Positives", value: profile.falsePositives, color: "text-slate-400" },
           { label: "Hints Used", value: profile.hintsUsed, color: "text-violet-300" },
-          { label: "Difficulty Level", value: `${profile.level}/100`, color: "text-fuchsia-300" },
+          { label: "Level Reached", value: `${profile.highestUnlockedLevel}/100`, color: "text-fuchsia-300" },
         ].map((s, i) => (
           <div key={i} className="rounded-xl bg-slate-900/60 p-4 ring-1 ring-slate-700/40">
             <p className={cn("font-mono text-2xl font-bold", s.color)}>{s.value}</p>

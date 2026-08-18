@@ -1,90 +1,69 @@
-import type { Mission } from "../types";
+import { getLevelBandInfo, MAX_LEVEL } from "../game/apps";
 import { cn } from "../utils/cn";
-import { getLevelModifiers, scaleMissionForLevel } from "../game/apps";
 
 interface Props {
-  missions: Mission[];
-  completedMissions: string[];
-  level: number;
-  onLevelChange: (level: number) => void;
-  onSelect: (m: Mission) => void;
+  highestUnlockedLevel: number;
+  onSelectLevel: (level: number) => void;
   onBack: () => void;
 }
 
-const DIFFICULTY_LABELS = ["Beginner", "Intermediate", "Advanced"];
-const DIFFICULTY_COLORS = ["text-emerald-400", "text-amber-400", "text-rose-400"];
+const BAND_ICONS = ["🔐", "🛒", "🏦"];
+const BAND_NAMES = ["Authentication System", "E-Commerce System", "Banking Application"];
 
-export default function MissionSelect({ missions, completedMissions, level, onLevelChange, onSelect, onBack }: Props) {
-  const mods = getLevelModifiers(level);
+export default function MissionSelect({ highestUnlockedLevel, onSelectLevel, onBack }: Props) {
+  const levels = Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
 
   return (
     <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center px-4 py-8">
       <h2 className="font-mono text-2xl font-bold text-sky-300 sm:text-3xl">
-        📋 Select Testing Assignment
+        🎚️ Level Ladder
       </h2>
-      <p className="mt-2 font-mono text-sm text-slate-400">Choose an application to investigate for bugs.</p>
+      <p className="mt-2 max-w-lg text-center font-mono text-sm text-slate-400">
+        Clear a level to unlock the next. Every level is a little harder than the last —
+        fewer free hints, less time, bigger XP.
+      </p>
 
-      {/* Difficulty Level Selector */}
-      <div className="mt-6 w-full max-w-lg rounded-2xl border border-violet-500/30 bg-slate-900/70 p-4 ring-1 ring-violet-400/10">
-        <div className="flex items-center justify-between">
-          <span className="font-mono text-xs font-bold text-violet-300">🎚️ Difficulty Level</span>
-          <span className="font-mono text-xs font-bold text-violet-200">{level} / 100 — {mods.label}</span>
-        </div>
-        <input
-          type="range"
-          min={1}
-          max={100}
-          value={level}
-          onChange={e => onLevelChange(Number(e.target.value))}
-          className="mt-3 w-full accent-violet-500"
-        />
-        <div className="mt-2 grid grid-cols-3 gap-2 text-center font-mono text-[10px] text-slate-400">
-          <div>⏱ {Math.round(mods.timeMultiplier * 100)}% time</div>
-          <div>⭐ {mods.xpMultiplier.toFixed(1)}x XP</div>
-          <div>💡 {mods.freeHints} free hint{mods.freeHints === 1 ? "" : "s"}</div>
-        </div>
-        <p className="mt-2 text-center font-mono text-[10px] text-slate-500">
-          Higher levels mean less time on the clock, fewer free hints, and bigger XP rewards.
-        </p>
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-4 rounded-xl bg-slate-900/60 px-4 py-2 ring-1 ring-slate-700/40">
+        {BAND_ICONS.map((icon, i) => (
+          <span key={i} className="font-mono text-xs text-slate-400">
+            {icon} {BAND_NAMES[i]}
+          </span>
+        ))}
       </div>
 
-      <div className="mt-8 grid w-full grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {missions.map((m, i) => {
-          const done = completedMissions.includes(m.id);
-          const scaled = scaleMissionForLevel(m, level);
+      <div className="mt-4 rounded-lg bg-emerald-500/10 px-4 py-2 ring-1 ring-emerald-400/20">
+        <span className="font-mono text-xs font-bold text-emerald-300">
+          🏁 Currently unlocked: Level {highestUnlockedLevel} / {MAX_LEVEL}
+        </span>
+      </div>
+
+      {/* Level grid */}
+      <div className="mt-6 grid w-full grid-cols-5 gap-2 sm:grid-cols-10">
+        {levels.map(lvl => {
+          const locked = lvl > highestUnlockedLevel;
+          const cleared = lvl < highestUnlockedLevel;
+          const current = lvl === highestUnlockedLevel;
+          const { bandIndex } = getLevelBandInfo(lvl);
           return (
             <button
-              key={m.id}
-              onClick={() => onSelect(m)}
-              disabled={done}
+              key={lvl}
+              onClick={() => !locked && onSelectLevel(lvl)}
+              disabled={locked}
+              title={locked ? `Locked — clear level ${lvl - 1} first` : `${BAND_NAMES[bandIndex]} · Level ${lvl}`}
               className={cn(
-                "group flex flex-col rounded-2xl border p-5 text-left transition-all duration-300",
-                done
-                  ? "cursor-not-allowed border-emerald-500/30 bg-emerald-500/5 opacity-60"
-                  : "border-slate-700/50 bg-slate-900/60 hover:-translate-y-1 hover:border-sky-400/50 hover:shadow-[0_10px_40px_rgba(56,189,248,0.15)] hover:bg-slate-800/80"
+                "relative flex aspect-square flex-col items-center justify-center rounded-lg font-mono text-xs font-bold transition-all",
+                locked
+                  ? "cursor-not-allowed bg-slate-900/40 text-slate-700 ring-1 ring-slate-800"
+                  : current
+                    ? "bg-sky-500/20 text-sky-200 ring-2 ring-sky-400/70 hover:bg-sky-500/30 active:scale-95"
+                    : cleared
+                      ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-500/20 active:scale-95"
+                      : "bg-slate-800/60 text-slate-300 ring-1 ring-slate-700/50 hover:bg-slate-700/60 active:scale-95"
               )}
-              style={{ animationDelay: `${i * 0.1}s` }}
             >
-              <div className="flex items-start justify-between">
-                <span className="text-4xl">{m.icon}</span>
-                {done && <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-bold text-emerald-300">DONE</span>}
-              </div>
-              <h3 className="mt-3 font-mono text-base font-bold text-white">{m.title}</h3>
-              <span className={cn("mt-1 font-mono text-xs font-bold", DIFFICULTY_COLORS[m.difficulty - 1])}>
-                {DIFFICULTY_LABELS[m.difficulty - 1]}
-              </span>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">{m.description.slice(0, 120)}...</p>
-              <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-950/60 px-2 py-1.5">
-                <span className="font-mono text-[10px] text-slate-400">⏱ {Math.floor(scaled.timeLimit / 60)}m</span>
-                <span className="font-mono text-[10px] text-amber-300">🐛 {m.bugs.length} bugs</span>
-                <span className="font-mono text-[10px] text-emerald-300">
-                  💰 {scaled.bugs.reduce((s, b) => s + b.xpReward, 0)} XP
-                </span>
-              </div>
-              <div className="mt-3 flex items-center gap-2 border-t border-slate-700/50 pt-3">
-                <span className="text-[10px] text-slate-500">🏢 {m.clientName}</span>
-                <span className="text-[10px] text-slate-500">📌 {m.sprintName}</span>
-              </div>
+              {locked ? "🔒" : cleared ? "✓" : BAND_ICONS[bandIndex]}
+              <span className="mt-0.5">{lvl}</span>
             </button>
           );
         })}
